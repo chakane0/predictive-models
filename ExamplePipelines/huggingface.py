@@ -5,6 +5,8 @@ from huggingface_hub import login
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import whisper
 import torch
+import torch.nn.functional as F
+
 
 # connect to HF
 load_dotenv()
@@ -19,34 +21,66 @@ model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
 def transcribe_audio(file_path):
     model = whisper.load_model("base")  # move outside if reused
     result = model.transcribe(file_path)
-
     return {
         "text": result["text"],
         "segments": result["segments"]
     }
 
 
-AUDIO_FILE = "ExampleModels/goldmanstanley_q4_earnings_call.mp3"
+AUDIO_FILE = "ExamplePipelines/goldmanstanley_q4_earnings_call.mp3"
 output = transcribe_audio(AUDIO_FILE)
-
 LABELS = ["positive", "negative", "neutral"]
 
 def analyze_sentiment(output):
     results = []
-    for seg in output["segments"]:
+    merged = merge_segments(output["segments"])
+    for seg in merged:
         inputs = tokenizer(seg["text"], return_tensors="pt", truncation=True)
         with torch.no_grad():
             logits = model(**inputs).logits
-        label = LABELS[logits.argmax().item()]
-        results.append({"start": seg["start"], "end": seg["end"], "text": seg["text"], "sentiment": label})
+        probs = F.softmax(logits, dim=-1)
+        confidence, predicted = probs.max(dim=-1)
+        label = LABELS[predicted.item()]
+        score = confidence.item()
+        if score < 0.70:
+            label = "uncertain"
+        results.append({
+            "start": seg["start"], 
+            "end": seg["end"], 
+            "text": seg["text"], 
+            "confidence": score,
+            "sentiment": label
+        })
     return results
 
-results = analyze_sentiment(output)
-for r in results:
-    print(f"[{r['start']:.1f}s - {r['end']:.1f}s] {r['sentiment']}: {r['text']}")
+def merge_segments(segments):
+    merged = []
+    current = {"text": "", "start": None, "end": None}
 
-SCORE_MAP = {"positive": 1, "neutral": 0, "negative": -1}
-COLOR_MAP = {"positive": "green", "neutral": "gray", "negative": "red"}
+    for seg in segments:
+        if current["start"] is None:
+            current["start"] = seg["start"]
+        current["text"] += " " + seg["text"].strip()
+        current["end"] = seg["end"]
+
+        if current["text"].strip().endswith((".", "?", "!")):
+            merged.append(current)
+            current = {"text": "", "start": None, "end": None}
+
+    if current["text"].strip():
+        merged.append(current)
+    
+    return merged
+
+results = analyze_sentiment(output)
+
+
+for r in results:
+    print(f"[{r['start']:.1f}s - {r['end']:.1f}s] {r['sentiment']} ({r['confidence']:.0%}): {r['text']}")
+
+SCORE_MAP = {"positive": 1, "neutral": 0, "negative": -1, "uncertain": 0}
+COLOR_MAP = {"positive": "green", "neutral": "gray", "negative": "red", "uncertain": "lightblue"}
+
 
 times = [r["start"] for r in results]
 scores = [SCORE_MAP[r["sentiment"]] for r in results]
