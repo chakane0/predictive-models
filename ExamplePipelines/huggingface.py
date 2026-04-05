@@ -72,27 +72,41 @@ def merge_segments(segments):
     
     return merged
 
+def calculate_weighted_sentiment_score(results):
+    score = 0
+    for r in results:
+        if r['sentiment'] == 'positive':
+            score += r['confidence']
+        elif r['sentiment'] == 'negative':
+            score -= r['confidence']
+    
+    overall_sentiment = score / len(results)
+    print(f"\n\nOVERALL SENTIMENT SCORE: {overall_sentiment:.3f}")
+    print(f"Range: -1 (very negative) to +1 (very positive)")
+    
+
 results = analyze_sentiment(output)
+calculate_weighted_sentiment_score(results)
 
 
-for r in results:
-    print(f"[{r['start']:.1f}s - {r['end']:.1f}s] {r['sentiment']} ({r['confidence']:.0%}): {r['text']}")
+# for r in results:
+#     print(f"[{r['start']:.1f}s - {r['end']:.1f}s] {r['sentiment']} ({r['confidence']:.0%}): {r['text']}")
 
-SCORE_MAP = {"positive": 1, "neutral": 0, "negative": -1, "uncertain": 0}
-COLOR_MAP = {"positive": "green", "neutral": "gray", "negative": "red", "uncertain": "lightblue"}
+# SCORE_MAP = {"positive": 1, "neutral": 0, "negative": -1, "uncertain": 0}
+# COLOR_MAP = {"positive": "green", "neutral": "gray", "negative": "red", "uncertain": "lightblue"}
 
 
-times = [r["start"] for r in results]
-scores = [SCORE_MAP[r["sentiment"]] for r in results]
-colors = [COLOR_MAP[r["sentiment"]] for r in results]
+# times = [r["start"] for r in results]
+# scores = [SCORE_MAP[r["sentiment"]] for r in results]
+# colors = [COLOR_MAP[r["sentiment"]] for r in results]
 
-plt.figure(figsize=(14, 4))
-plt.bar(times, scores, color=colors, width=2)
-plt.axhline(0, color="black", linewidth=0.8, linestyle="--")
-plt.xlabel("Time (seconds)")
-plt.ylabel("Sentiment")
-plt.title("Earnings Call Sentiment Over Time")
-plt.yticks([-1, 0, 1], ["Negative", "Neutral", "Positive"])
-plt.tight_layout()
-plt.savefig("sentiment_chart.png")
-plt.show()
+# plt.figure(figsize=(14, 4))
+# plt.bar(times, scores, color=colors, width=2)
+# plt.axhline(0, color="black", linewidth=0.8, linestyle="--")
+# plt.xlabel("Time (seconds)")
+# plt.ylabel("Sentiment")
+# plt.title("Earnings Call Sentiment Over Time")
+# plt.yticks([-1, 0, 1], ["Negative", "Neutral", "Positive"])
+# plt.tight_layout()
+# plt.savefig("sentiment_chart.png")
+# plt.show()
